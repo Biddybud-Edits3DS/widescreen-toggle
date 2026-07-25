@@ -3,27 +3,82 @@ on: [push, workflow_dispatch]
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: devkitpro/devkitarm:20250101
+    container: devkitpro/devkitarm:latest
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-      
-      - name: Compile 3DSX App
+      - name: Create and Compile Source Direct Mode
         run: |
-          # Create symbolic link to map standard build paths
-          ln -s /opt/devkitpro /usr/local/share/devkitpro
-          
-          # Compile the main C code object
-          arm-none-eabi-gcc -march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft -O2 -mword-relocations -fomit-frame-pointer -ffast-math -I/opt/devkitpro/libctru/include -D__3DS__ -c source/main.c -o main.o
-          
-          # Link object files into a 3DS executable ELF binary
-          arm-none-eabi-gcc -specs=3dsx.specs -g -march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft main.o -L/opt/devkitpro/libctru/lib -lctru -lm -o widescreen_toggle.elf
-          
-          # Convert the ELF binary into your usable 3DSX app file
+          # Write the C code out directly into the workspace container
+          cat << 'EOF' > main.c
+          #include <3ds.h>
+          #include <stdio.h>
+          #include <unistd.h>
+          #include <stdlib.h>
+
+          int main(int argc, char **argv)
+          {
+              gfxInitDefault();
+              consoleInit(GFX_TOP, NULL);
+
+              printf("\x1b[2;2HChecking Widescreen Patch...\n");
+
+              const char* enabledPath = "sdmc:/luma/sysmodules/TwlBg.cxi";
+              const char* disabledPath = "sdmc:/luma/sysmodules/TwlBg.cxi.off";
+              bool swapSuccessful = false;
+
+              if(access(enabledPath, F_OK) == 0) {
+                  if(rename(enabledPath, disabledPath) == 0) {
+                      printf("\n\x1b[32m  [DISABLED] Widescreen Patch\x1b[0m\n");
+                      printf("  TwlBg.cxi -> TwlBg.cxi.off\n");
+                      printf("\n  DSpico will now boot in 4:3 (Fixed)!");
+                      swapSuccessful = true;
+                  } else {
+                      printf("\n\x1b[31m  [ERROR] Could not deactivate patch!\x1b[0m\n");
+                  }
+              } 
+              else if(access(disabledPath, F_OK) == 0) {
+                  if(rename(disabledPath, enabledPath) == 0) {
+                      printf("\n\x1b[32m  [ENABLED] Widescreen Patch\x1b[0m\n");
+                      printf("  TwlBg.cxi.off -> TwlBg.cxi\n");
+                      printf("\n  Warning: DSpico will use stretched scaling.");
+                      swapSuccessful = true;
+                  } else {
+                      printf("\n\x1b[31m  [ERROR] Could not activate patch!\x1b[0m\n");
+                  }
+              } 
+              else {
+                  printf("\n\x1b[31m  [ERROR] TwlBg.cxi not found!\x1b[0m\n");
+                  printf("  Please make sure your widescreen patch file\n");
+                  printf("  is placed inside: luma/sysmodules/\n");
+              }
+
+              if(swapSuccessful) {
+                  printf("\n\n\n  Rebooting console in 3 seconds...");
+                  gfxFlushBuffers();
+                  gfxSwapBuffers();
+                  svcSleepThread(3000000000LL);
+                  APT_HardwareResetAsync();
+              } else {
+                  printf("\n\n\n  Press START to exit back to Homebrew Launcher.");
+                  while (aptMainLoop()) {
+                      gspWaitForVBlank();
+                      hidScanInput();
+                      u32 kDown = hidKeysDown();
+                      if (kDown & KEY_START) break;
+                  }
+              }
+
+              gfxExit();
+              return 0;
+          }
+          EOF
+
+          # Compile using absolute 3DS environment flags
+          /opt/devkitpro/devkitARM/bin/arm-none-eabi-gcc -march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft -O2 -mword-relocations -fomit-frame-pointer -ffast-math -I/opt/devkitpro/libctru/include -D__3DS__ -c main.c -o main.o
+          /opt/devkitpro/devkitARM/bin/arm-none-eabi-gcc -specs=3dsx.specs -g -march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft main.o -L/opt/devkitpro/libctru/lib -lctru -lm -o widescreen_toggle.elf
           /opt/devkitpro/tools/bin/3dsxtool widescreen_toggle.elf widescreen_toggle.3dsx
-          
-      - name: Upload Finished App
+
+      - name: Upload Finished 3DSX File
         uses: actions/upload-artifact@v4
         with:
           name: WidescreenToggle-3DSX
-          path: '*.3dsx'
+          path: 'widescreen_toggle.3dsx'
