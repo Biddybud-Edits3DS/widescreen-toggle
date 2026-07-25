@@ -1,0 +1,17 @@
+name: Build 3DSX App
+on: [push, workflow_dispatch]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: devkitpro/devkitarm:latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      - name: Compile App
+        run: |
+          make
+      - name: Upload 3DSX File
+        uses: actions/upload-artifact@v4
+        with:
+          name: WidescreenToggle-3DSX
+          path: '*.3dsx'
