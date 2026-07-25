@@ -1,30 +1,12 @@
-ifneq ($(words $(CURDIR)),1)
-$(error Spaces are not allowed in the project path.)
-endif
-
-TARGET      := widescreen_toggle
-BUILD       := build
-SOURCES     := source
-INCLUDES    := include
-
-include $(DEVKITPRO)/devkitARM/3ds_rules
-
-export OUTPUT   := $(CURDIR)
-export VPATH    := $(dir $(wildcard $(SOURCES)/*))
-export CFILES   := $(notdir $(wildcard $(SOURCES)/*.c))
-export OFILES   := $(CFILES:.c=.o)
-export INCLUDE  := $(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) \
-                   $(foreach dir,$(LIBDIRS),-I$(dir)/include) \
-                   -I$(DEVKITPRO)/libctru/include
-
-.PHONY: clean all
+TARGET   := widescreen_toggle
+OBJS     := source/main.c
 
 all: $(TARGET).3dsx
 
-$(TARGET).3dsx: $(TARGET).elf
-
-$(TARGET).elf: $(OFILES)
-	$(CC) $(LDFLAGS) $(OFILES) $(LIBDIRS) $(LIBS) -o $@
+$(TARGET).3dsx: $(OBJS)
+	arm-none-eabi-gcc -march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft -O2 -mword-relocations -fomit-frame-pointer -ffast-math -I$(DEVKITPRO)/libctru/include -D__3DS__ -c source/main.c -o main.o
+	arm-none-eabi-gcc -specs=3dsx.specs -g -march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft -Wl,-Map,$(TARGET).map main.o -L$(DEVKITPRO)/libctru/lib -lctru -lm -o $(TARGET).elf
+	3dsxtool $(TARGET).elf $(TARGET).3dsx
 
 clean:
-	@rm -rf $(BUILD) $(TARGET).elf $(TARGET).3dsx
+	rm -f *.o *.elf *.3dsx *.map
