@@ -2,7 +2,7 @@ ifneq ($(words $(CURDIR)),1)
 $(error Spaces are not allowed in the project path.)
 endif
 
-TARGET      := widescreen-toggle
+TARGET      := widescreen_toggle
 BUILD       := build
 SOURCES     := source
 INCLUDES    := include
