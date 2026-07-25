@@ -7,10 +7,19 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-      - name: Compile App
+      
+      - name: Fix Formatting and Compile
         run: |
-          make
-      - name: Upload 3DSX File
+          # Convert space alignments to tab formats for the system compiler
+          sed -i 's/^  /\t/g' Makefile
+          sed -i 's/^	/\t/g' Makefile
+          
+          # Run the main compile chain
+          arm-none-eabi-gcc -march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft -O2 -mword-relocations -fomit-frame-pointer -ffast-math -I/opt/devkitpro/libctru/include -D__3DS__ -c source/main.c -o main.o
+          arm-none-eabi-gcc -specs=3dsx.specs -g -march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft main.o -L/opt/devkitpro/libctru/lib -lctru -lm -o widescreen_toggle.elf
+          /opt/devkitpro/tools/bin/3dsxtool widescreen_toggle.elf widescreen_toggle.3dsx
+          
+      - name: Upload Finished App
         uses: actions/upload-artifact@v4
         with:
           name: WidescreenToggle-3DSX
