@@ -3,20 +3,23 @@ on: [push, workflow_dispatch]
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: devkitpro/devkitarm:latest
+    container: devkitpro/devkitarm:20250101
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
       
-      - name: Fix Formatting and Compile
+      - name: Compile 3DSX App
         run: |
-          # Convert space alignments to tab formats for the system compiler
-          sed -i 's/^  /\t/g' Makefile
-          sed -i 's/^	/\t/g' Makefile
+          # Create symbolic link to map standard build paths
+          ln -s /opt/devkitpro /usr/local/share/devkitpro
           
-          # Run the main compile chain
+          # Compile the main C code object
           arm-none-eabi-gcc -march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft -O2 -mword-relocations -fomit-frame-pointer -ffast-math -I/opt/devkitpro/libctru/include -D__3DS__ -c source/main.c -o main.o
+          
+          # Link object files into a 3DS executable ELF binary
           arm-none-eabi-gcc -specs=3dsx.specs -g -march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft main.o -L/opt/devkitpro/libctru/lib -lctru -lm -o widescreen_toggle.elf
+          
+          # Convert the ELF binary into your usable 3DSX app file
           /opt/devkitpro/tools/bin/3dsxtool widescreen_toggle.elf widescreen_toggle.3dsx
           
       - name: Upload Finished App
